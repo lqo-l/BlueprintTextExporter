@@ -1,55 +1,52 @@
 # BlueprintTextExporter
 
-一个面向 Unreal Editor 的导出插件，用于把 `Blueprint` 和 `Material` 图逻辑导出为：
+![UE 5.7](https://img.shields.io/badge/UE-5.7-0E1128)
+![UE 4.26](https://img.shields.io/badge/UE-4.26-0E1128)
+![Blueprint](https://img.shields.io/badge/Asset-Blueprint-1F6FEB)
+![Material](https://img.shields.io/badge/Asset-Material-238636)
+![TXT + JSON](https://img.shields.io/badge/Output-TXT%20%2B%20JSON-8250DF)
 
-- 便于人类阅读的 `.txt`
-- 便于程序处理的 `.json`
+Export Blueprint and Material graphs from Unreal Engine as readable `.txt` and structured `.json`.
 
-它的目标不是还原 Shader 编译细节，而是把图逻辑转换成适合调试、评审、文档沉淀和 AI 理解的文本资产。
+这个插件面向 Unreal Editor，目标是把原本只能在图编辑器里查看的逻辑，转换成适合阅读、评审、归档和 AI 理解的文本结果。
 
-## 核心能力
+## Features
 
-- 在 Content Browser 中右键导出 Blueprint 执行流
-- 在 Content Browser 中右键导出 Material、Material Instance、Material Function 图结构
-- 同时输出 `.txt` 与 `.json`
-- 导出 Blueprint 纯节点输入信息，减少只看执行线时的上下文缺失
-- 导出材质根属性链路，如 `Emissive Color`、`Base Color` 等
-- 导出材质声明过的参数，包括“暴露了但未接入最终输出”的参数
-- 导出 Material Function 依赖与输出链
-- 导出完成后可直接从通知中打开目标输出目录
+- Right-click export for `Blueprint`
+- Right-click export for `Material` / `MaterialInstance` / `MaterialFunction`
+- Human-readable `.txt` output for quick inspection
+- Structured `.json` output for tools and pipelines
+- Inline pure-input context for Blueprint graphs
+- Root-property graph traversal for Material graphs
+- Declared parameter export, including exposed-but-unused parameters
+- One-click open output folder after export
 
-## 适用场景
+## Supported Assets
 
-- 团队协作中的 Blueprint / Material 文档化
-- 不打开编辑器截图，也能快速理解图逻辑
-- 给代码评审、TA 评审或技术美术分析提供文本上下文
-- 作为 AI 助手、图可视化工具、对比工具的输入
-- 做资源回归排查，观察导出结果差异
+- Blueprint
+- Material
+- Material Instance
+- Material Function
 
-## 当前支持
+## Quick Start
 
-- Blueprint 执行流导出
-- Blueprint 纯节点输入展开
-- Material 根属性追踪
-- Material Instance 参数说明导出
-- Material / Function 暴露参数清单导出
-- 未接入最终输出的声明参数保留
-- Material Function 输出链追踪
-- Static Switch 图导出
+1. Copy this plugin to `Engine/Plugins/Developer/BlueprintTextExporter` or your Unreal plugin directory.
+2. Build the editor target.
+3. Enable `Blueprint Text Exporter` in the Plugins window if needed.
+4. Right-click an asset in the Content Browser and run:
+   - `Export Blueprint Text + JSON`
+   - `Export Material Text + JSON`
 
-## 编辑器菜单
+Detailed setup steps: [docs/INSTALL.md](docs/INSTALL.md)
 
-- `Export Blueprint Text + JSON`
-- `Export Material Text + JSON`
+## Output
 
-## 输出位置
+Exported files are written to:
 
 - `Saved/BlueprintExports/...`
 - `Saved/MaterialExports/...`
 
-## 快速示例
-
-导出后的 Blueprint 文本通常类似：
+Blueprint text output is designed for fast reading:
 
 ```text
 Event BeginPlay
@@ -57,7 +54,7 @@ Event BeginPlay
     Print String
 ```
 
-导出后的 Material 文本通常包含：
+Material text output includes metadata, parameters and graph roots:
 
 ```text
 Asset: /Game/...
@@ -72,57 +69,43 @@ Graph:
         Switch Param (False) / 'EnablePerShadow'
 ```
 
-## 兼容性说明
+Format details: [docs/EXPORT_FORMAT.md](docs/EXPORT_FORMAT.md)
 
-当前仓库面向以下通用引擎版本整理：
+## Why TXT and JSON
+
+- Use `.txt` when the goal is quick reading, reviews, or feeding concise context into AI
+- Use `.json` when the goal is automation, structured parsing, or diff-friendly processing
+
+## Compatibility
+
+Tested with:
 
 - Unreal Engine 5.7
 - Unreal Engine 4.26
 
-更详细的兼容说明见：[docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
+Compatibility notes: [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
 
-## 文档导航
+## Validation
 
-- [安装说明](docs/INSTALL.md)
-- [验证说明](docs/VALIDATION.md)
-- [导出格式说明](docs/EXPORT_FORMAT.md)
-- [兼容性说明](docs/COMPATIBILITY.md)
+Recommended validation flow:
 
-## 仓库结构
+1. Run `BuildPlugin`
+2. Verify the context-menu entries in the editor
+3. Export one Blueprint and one Material asset
+4. Check both `.txt` and `.json` outputs
 
-- `BlueprintTextExporter.uplugin`：插件清单
-- `Config/`：插件过滤与打包配置
-- `Source/`：插件源码
-- `docs/`：安装、验证、格式和兼容性文档
+Validation checklist: [docs/VALIDATION.md](docs/VALIDATION.md)
 
-## 已验证内容
+## Design Notes
 
-已通过以下流程验证插件可打包构建：
+- The goal is graph understanding, not shader reconstruction
+- Material export keeps declared parameters even when they are not connected to final outputs
+- JSON favors completeness over compactness
+- Some repeated subgraphs may appear more than once in exported output when that improves traceability
 
-```powershell
-RunUAT.bat BuildPlugin `
-  -Plugin="D:\Path\To\BlueprintTextExporter.uplugin" `
-  -Package="D:\Path\To\BlueprintTextExporterBuild"
-```
+## Documentation
 
-已验证能力包括：
-
-- Blueprint 文本导出
-- 材质图导出
-- 材质暴露参数导出
-- 导出通知中打开输出目录
-- UE5.7 / UE4.26 兼容构建
-
-## 后续可继续增强
-
-- 紧凑 JSON 模式
-- 面向大模型的摘要模式
-- 重复子图折叠
-- 节点语义增强
-- 可选去除冗余 `id` 字段
-
-## 说明
-
-- 这是一个仅编辑器可用的插件
-- 仓库提供完整源码，适合安装、阅读和按需扩展导出能力
-- 当前文档重点覆盖安装、验证、导出格式和引擎兼容性
+- [Installation](docs/INSTALL.md)
+- [Validation](docs/VALIDATION.md)
+- [Export Format](docs/EXPORT_FORMAT.md)
+- [Compatibility](docs/COMPATIBILITY.md)

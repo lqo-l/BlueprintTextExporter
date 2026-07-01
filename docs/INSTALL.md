@@ -1,15 +1,22 @@
-# 安装说明
+# 安装
 
-## 方案一：安装到引擎目录
+## 目录位置
 
-1. 将本仓库复制到：
-   `Engine/Plugins/Developer/BlueprintTextExporter`
-2. 如有需要，重新生成工程文件。
-3. 编译编辑器目标。
-4. 启动 Unreal Editor。
-5. 如果插件未自动启用，请在 Plugins 窗口中启用 `Blueprint Text Exporter`。
+推荐安装到：
 
-## 推荐构建命令
+`Engine/Plugins/Developer/BlueprintTextExporter`
+
+如果你的工作流更适合按工程隔离，也可以放到工程的 `Plugins/` 目录下。
+
+## 安装步骤
+
+1. 复制本仓库到目标插件目录
+2. 重新生成工程文件（如有需要）
+3. 编译编辑器目标
+4. 启动 Unreal Editor
+5. 在 `Plugins` 窗口中确认 `Blueprint Text Exporter` 已启用
+
+## 构建命令
 
 ```powershell
 RunUAT.bat BuildPlugin `
@@ -17,12 +24,16 @@ RunUAT.bat BuildPlugin `
   -Package="D:\Path\To\BlueprintTextExporterBuild"
 ```
 
+预期结果：
+
+- `BUILD SUCCESSFUL`
+
 ## 模块信息
 
-- 模块名：`BlueprintTextExporter`
-- 模块类型：`Editor`
+- Module: `BlueprintTextExporter`
+- Type: `Editor`
 
-## 适用说明
+## 适用版本
 
-- Unreal Engine 5.7 版本使用 UE5 风格接口
-- Unreal Engine 4.26 版本需要使用已适配的 UE4.26 兼容实现
+- Unreal Engine 5.7
+- Unreal Engine 4.26

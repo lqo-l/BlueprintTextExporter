@@ -1,43 +1,44 @@
-# 兼容性说明
+# 兼容性
 
-## 当前验证状态
+## 目标版本
 
-本仓库当前面向两类通用引擎版本整理：
+当前支持以下引擎版本：
 
 - Unreal Engine 5.7
 - Unreal Engine 4.26
 
 ## Unreal Engine 5.7
 
-验证点包括：
+支持：
 
 - Blueprint 导出
-- Material / MaterialInstance / MaterialFunction 导出
-- 暴露参数导出
-- 未接入最终输出的参数保留
-- 导出通知中打开输出目录
+- Material 导出
+- Declared Parameters 导出
+- 导出完成后打开输出目录
 
 ## Unreal Engine 4.26
 
-为适配 UE4.26，已处理以下典型兼容差异：
+为适配 UE4.26，已处理的典型差异包括：
 
-- `FAppStyle` / `FEditorStyle` 差异
-- `FAssetData::GetClass()` 旧版接口差异
+- `FAppStyle` / `FEditorStyle`
+- `FAssetData::GetClass()` 的旧版接口差异
 - `FNotificationInfo` 字段差异
-- 材质导出中部分 UE5 专用 API 的替换
-- `StaticSwitch` / `StaticSwitchParameter` 导出兼容
+- 部分 Material 导出 API 差异
+- `StaticSwitch` / `StaticSwitchParameter` 导出差异
 
 ## 使用建议
 
-如果你要将本仓库用于目标引擎版本，建议优先做一次：
+在目标引擎版本接入后，建议至少完成以下检查：
 
 1. `BuildPlugin`
-2. 编辑器内右键导出验证
-3. Blueprint 与 Material 样例资源回归检查
+2. 编辑器内菜单是否正常出现
+3. Blueprint 导出是否正常
+4. Material 导出是否正常
+5. `.txt` 与 `.json` 是否同时生成
 
-## 可能需要继续适配的情况
+## 可能需要额外适配的情况
 
-- 材质节点 API 在不同引擎版本中发生变化
+- 引擎分支修改了材质节点 API
 - 参数系统或元数据接口发生变化
-- 内容浏览器菜单扩展接口差异
-- 自定义材质节点需要额外导出规则
+- Content Browser 扩展接口有差异
+- 工程里存在自定义材质节点，需要额外导出规则
