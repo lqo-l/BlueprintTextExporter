@@ -1,5 +1,7 @@
 # BlueprintTextExporter
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 ![UE 5.7](https://img.shields.io/badge/UE-5.7-0E1128)
 ![UE 4.26](https://img.shields.io/badge/UE-4.26-0E1128)
 ![Blueprint](https://img.shields.io/badge/Asset-Blueprint-1F6FEB)
@@ -8,16 +10,16 @@
 
 Export Blueprint and Material graphs from Unreal Engine as readable `.txt` and structured `.json`.
 
-这个插件面向 Unreal Editor，目标是把原本只能在图编辑器里查看的逻辑，转换成适合阅读、评审、归档和 AI 理解的文本结果。
+BlueprintTextExporter is an Unreal Editor plugin for turning graph-based assets into text outputs that are easier to review, diff, archive, and feed into external tools or AI workflows.
 
 ## Features
 
 - Right-click export for `Blueprint`
-- Right-click export for `Material` / `MaterialInstance` / `MaterialFunction`
-- Human-readable `.txt` output for quick inspection
-- Structured `.json` output for tools and pipelines
+- Right-click export for `Material`, `MaterialInstance`, and `MaterialFunction`
+- Human-readable `.txt` output
+- Structured `.json` output
 - Inline pure-input context for Blueprint graphs
-- Root-property graph traversal for Material graphs
+- Root-property traversal for Material graphs
 - Declared parameter export, including exposed-but-unused parameters
 - One-click open output folder after export
 
@@ -30,14 +32,14 @@ Export Blueprint and Material graphs from Unreal Engine as readable `.txt` and s
 
 ## Quick Start
 
-1. Copy this plugin to `Engine/Plugins/Developer/BlueprintTextExporter` or your Unreal plugin directory.
+1. Copy the plugin to `Engine/Plugins/Developer/BlueprintTextExporter` or your project/plugin directory.
 2. Build the editor target.
 3. Enable `Blueprint Text Exporter` in the Plugins window if needed.
 4. Right-click an asset in the Content Browser and run:
    - `Export Blueprint Text + JSON`
    - `Export Material Text + JSON`
 
-Detailed setup steps: [docs/INSTALL.md](docs/INSTALL.md)
+Installation guide: [docs/INSTALL.md](docs/INSTALL.md)
 
 ## Output
 
@@ -46,7 +48,7 @@ Exported files are written to:
 - `Saved/BlueprintExports/...`
 - `Saved/MaterialExports/...`
 
-Blueprint text output is designed for fast reading:
+Blueprint output focuses on readable execution flow:
 
 ```text
 Event BeginPlay
@@ -54,7 +56,7 @@ Event BeginPlay
     Print String
 ```
 
-Material text output includes metadata, parameters and graph roots:
+Material output includes metadata, parameters, and graph roots:
 
 ```text
 Asset: /Game/...
@@ -69,12 +71,12 @@ Graph:
         Switch Param (False) / 'EnablePerShadow'
 ```
 
-Format details: [docs/EXPORT_FORMAT.md](docs/EXPORT_FORMAT.md)
+Format reference: [docs/EXPORT_FORMAT.md](docs/EXPORT_FORMAT.md)
 
 ## Why TXT and JSON
 
-- Use `.txt` when the goal is quick reading, reviews, or feeding concise context into AI
-- Use `.json` when the goal is automation, structured parsing, or diff-friendly processing
+- Use `.txt` for quick reading, reviews, and concise AI context
+- Use `.json` for automation, structured parsing, and downstream tooling
 
 ## Compatibility
 
@@ -101,7 +103,7 @@ Validation checklist: [docs/VALIDATION.md](docs/VALIDATION.md)
 - The goal is graph understanding, not shader reconstruction
 - Material export keeps declared parameters even when they are not connected to final outputs
 - JSON favors completeness over compactness
-- Some repeated subgraphs may appear more than once in exported output when that improves traceability
+- Repeated subgraphs may appear more than once when that improves traceability
 
 ## Documentation
 
@@ -109,3 +111,4 @@ Validation checklist: [docs/VALIDATION.md](docs/VALIDATION.md)
 - [Validation](docs/VALIDATION.md)
 - [Export Format](docs/EXPORT_FORMAT.md)
 - [Compatibility](docs/COMPATIBILITY.md)
+- [简体中文文档](README.zh-CN.md)

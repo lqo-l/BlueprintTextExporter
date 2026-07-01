@@ -1,44 +1,44 @@
-# 兼容性
+# Compatibility
 
-## 目标版本
+[English](COMPATIBILITY.md) | [简体中文](COMPATIBILITY.zh-CN.md)
 
-当前支持以下引擎版本：
+## Tested Versions
 
 - Unreal Engine 5.7
 - Unreal Engine 4.26
 
 ## Unreal Engine 5.7
 
-支持：
+Validated support includes:
 
-- Blueprint 导出
-- Material 导出
-- Declared Parameters 导出
-- 导出完成后打开输出目录
+- Blueprint export
+- Material export
+- Declared parameter export
+- Open-output-folder action after export
 
 ## Unreal Engine 4.26
 
-为适配 UE4.26，已处理的典型差异包括：
+Typical compatibility work for UE4.26 includes:
 
 - `FAppStyle` / `FEditorStyle`
-- `FAssetData::GetClass()` 的旧版接口差异
-- `FNotificationInfo` 字段差异
-- 部分 Material 导出 API 差异
-- `StaticSwitch` / `StaticSwitchParameter` 导出差异
+- Older `FAssetData::GetClass()` usage
+- `FNotificationInfo` field differences
+- Material-export API differences
+- `StaticSwitch` / `StaticSwitchParameter` export differences
 
-## 使用建议
+## Recommended Checks
 
-在目标引擎版本接入后，建议至少完成以下检查：
+After integrating into a target engine build, verify at least:
 
 1. `BuildPlugin`
-2. 编辑器内菜单是否正常出现
-3. Blueprint 导出是否正常
-4. Material 导出是否正常
-5. `.txt` 与 `.json` 是否同时生成
+2. Context-menu entries appear in the editor
+3. Blueprint export works
+4. Material export works
+5. Both `.txt` and `.json` are generated
 
-## 可能需要额外适配的情况
+## Cases That May Need Extra Adaptation
 
-- 引擎分支修改了材质节点 API
-- 参数系统或元数据接口发生变化
-- Content Browser 扩展接口有差异
-- 工程里存在自定义材质节点，需要额外导出规则
+- Engine-specific material node API changes
+- Parameter-system or metadata API changes
+- Content Browser extension differences
+- Custom material nodes that require additional export rules
