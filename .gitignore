@@ -1,0 +1,24 @@
+﻿# Unreal plugin transient files
+
+Binaries/
+Intermediate/
+DerivedDataCache/
+Saved/
+
+# IDE
+.vs/
+.idea/
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# Build outputs
+*.obj
+*.pdb
+*.lib
+*.exp
+*.dll
+
+# Logs
+*.log
