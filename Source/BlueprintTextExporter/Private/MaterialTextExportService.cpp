@@ -1120,11 +1120,8 @@ bool FMaterialTextExportService::ExportMaterialAsset(UObject* InAsset, FString& 
 	}
 
 	FGraphSummary Summary = BuildSummary(InAsset);
-	if (Summary.Roots.Num() == 0 && Summary.Notes.Num() == 0 && Summary.DeclaredParameters.Num() == 0)
-	{
-		OutErrorMessage = TEXT("No material graph roots or parameter notes were found.");
-		return false;
-	}
+	// Moon Modified: Material instances may intentionally have no local graph or overrides,
+	// while their parent and material settings remain useful export data.
 
 	BuildExportPaths(InAsset, OutTextPath, OutJsonPath);
 

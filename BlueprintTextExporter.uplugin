@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "Blueprint Text Exporter",
-	"Description": "Exports Blueprint and Material graphs as readable text and JSON from the Content Browser.",
+	"Description": "Exports Blueprint and material graphs as readable text and JSON from the Content Browser or command line.",
 	"Category": "Scripting",
 	"CreatedBy": "OpenAI Codex",
 	"CreatedByURL": "",

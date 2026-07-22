@@ -21,6 +21,7 @@ BlueprintTextExporter is an Unreal Editor plugin for turning graph-based assets 
 - Inline pure-input context for Blueprint graphs
 - Root-property traversal for Material graphs
 - Declared parameter export, including exposed-but-unused parameters
+- Command-line batch export for Blueprints and materials
 - One-click open output folder after export
 
 ## Supported Assets
@@ -38,6 +39,14 @@ BlueprintTextExporter is an Unreal Editor plugin for turning graph-based assets 
 4. Right-click an asset in the Content Browser and run:
    - `Export Blueprint Text + JSON`
    - `Export Material Text + JSON`
+
+### Command Line
+
+Use `UnrealEditor-Cmd.exe` for unattended or batch export. `-Assets` accepts comma-separated package paths or absolute `.uasset` paths:
+
+```powershell
+UnrealEditor-Cmd.exe <Project>.uproject -run=BlueprintTextExport -Assets="/Game/Path/BP_Test,/Game/Path/M_Test" -unattended -NoSplash
+```
 
 Installation guide: [docs/INSTALL.md](docs/INSTALL.md)
 
