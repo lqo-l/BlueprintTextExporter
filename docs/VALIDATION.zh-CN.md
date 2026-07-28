@@ -31,6 +31,30 @@ RunUAT.bat BuildPlugin `
 2. 点击 `Export Material Text + JSON`
 3. 检查 `Saved/MaterialExports/...`
 
+### 已打开 Editor 的控制台
+
+1. 保持目标项目 Editor 已打开；不要启动 `UnrealEditor-Cmd.exe`。
+2. 在 Output Log 控制台执行 `BlueprintTextExport.Export /Game/Path/M_Test`。
+3. 确认 Output Log 输出导出的 `.txt` 和 `.json` 路径。
+4. 在主 Content Browser 选中一个受支持资源，执行 `BlueprintTextExport.Export`，确认导出该选中资源。
+5. 传入无效路径执行命令，确认 Output Log 报告非阻塞失败，且不弹出模态对话框。
+
+### MCP 当前 Editor 验证（UE 5.7）
+
+已在正在运行的 `Client` Editor 中通过 `UEEditorMCP` 验证，过程中未启动、关闭或重启 Editor：
+
+```python
+import unreal; unreal.SystemLibrary.execute_console_command(unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem).get_editor_world(), 'BlueprintTextExport.Export /KuroRender/KuroDynamicEnv/Material/M_BillboardCloudNS,/KuroRender/KuroDynamicEnv/Material/MF/MF_BillboardCloudLighting')
+```
+
+预期证据：
+
+- `LogBlueprintTextExporterMenu` 输出两个资源的导出成功日志。
+- `Saved/MaterialExports` 下对应 TXT 和 JSON 的更新时间刷新。
+- 无效路径输出 `Cannot load asset`，并显示非阻塞失败通知。
+
+若 MCP 实现通过 Output Log 的 `py` 命令转发 Python，请保持代码单行，或使用 `exec(...)` 包装多行代码；直接传递包含 `for`、`if`、`try` 等缩进结构的多行脚本可能被拆成多条控制台命令。
+
 ## 3. 输出检查项
 
 ### Blueprint

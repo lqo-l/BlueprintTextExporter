@@ -22,6 +22,7 @@ BlueprintTextExporter 是一个 Unreal Editor 插件，用于把原本只能在�
 - Material 导出包含根属性图追踪
 - 支持导出声明参数，包括暴露但未接入最终输出的参数
 - 支持通过命令行批量导出 Blueprint 和材质
+- 支持在已打开的 Editor 控制台中导出，便于 Codex 自动化
 - 导出完成后可一键打开输出目录
 
 ## 支持的资源类型
@@ -47,6 +48,22 @@ BlueprintTextExporter 是一个 Unreal Editor 插件，用于把原本只能在�
 ```powershell
 UnrealEditor-Cmd.exe <项目>.uproject -run=BlueprintTextExport -Assets="/Game/Path/BP_Test,/Game/Path/M_Test" -unattended -NoSplash
 ```
+
+### 已打开 Editor 的控制台导出
+
+项目 Editor 已打开时，在其 Output Log 控制台执行以下命令；该方式不会启动另一个 `UnrealEditor` 进程：
+
+```text
+BlueprintTextExport.Export
+```
+
+无参数时，导出主 Content Browser 当前选中的受支持资源。若要指定资源，可传入逗号分隔的长包路径或绝对 `.uasset` 路径：
+
+```text
+BlueprintTextExport.Export /Game/Path/BP_Test,/Game/Path/M_Test
+```
+
+控制台命令会将无效路径和不支持资源写入 Output Log，不会弹出阻塞对话框，适用于 Codex 自动化。仅在没有已打开 Editor 的无人值守批处理场景使用 `UnrealEditor-Cmd.exe`。
 
 安装说明：[docs/INSTALL.zh-CN.md](docs/INSTALL.zh-CN.md)
 
