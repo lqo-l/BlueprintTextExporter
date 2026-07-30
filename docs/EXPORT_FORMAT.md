@@ -43,9 +43,11 @@ Common sections include:
 - `BlendMode`
 - `TwoSided`
 - `DependentFunctions`
+- `DependentFunctionExports`
 - `Notes`
 - `DeclaredParameters`
 - `Graph`
+- `CustomHLSL`
 
 ## Material JSON Fields
 
@@ -59,9 +61,13 @@ Common fields include:
 - `twoSided`
 - `parentPath`
 - `dependentFunctions`
+- `dependentFunctionExports`
 - `notes`
 - `declaredParameters`
 - `roots`
+- `customHlsl`
+
+Reachable Material Functions are exported recursively to their own TXT and JSON files. Function-call nodes remain in the caller graph, while `dependentFunctionExports` maps each function asset path to its output files. `customHlsl` belongs only to the current material or function and preserves complete Custom-node source and configuration.
 
 ## Declared Parameters
 

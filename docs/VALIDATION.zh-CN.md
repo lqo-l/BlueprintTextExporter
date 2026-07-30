@@ -73,6 +73,9 @@ import unreal; unreal.SystemLibrary.execute_console_command(unreal.get_editor_su
 - 存在 `MaterialDomain`
 - 能看到至少一个根属性输出，如 `Emissive Color` 或 `Base Color`
 - 对启用 `Use Material Attributes` 的材质，存在 `[Root] Material Attributes`，且其子图不为空
+- 命名重路由 Usage 包含 `Declaration` 边，并从 Declaration 的 `Input` 继续连接上游图
+- 实际可达的函数调用存在 `dependentFunctionExports` 指向的独立 TXT/JSON，调用方不再含 `FunctionOutput:` 子图
+- 完整 Custom 源码仅出现在所属材质或函数文件的 `CustomHLSL`/`customHlsl` 中
 - 图中能看到参数名、纹理引用或函数调用
 - `.txt` 和 `.json` 中都包含 `DeclaredParameters`
 - 未接入最终输出的已声明参数仍会被保留

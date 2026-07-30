@@ -73,6 +73,9 @@ When using an MCP implementation that forwards Python through the Output Log `py
 - `MaterialDomain` is present
 - At least one root output is visible, such as `Emissive Color` or `Base Color`
 - For a `Use Material Attributes` material, `[Root] Material Attributes` is present and its child graph is non-empty
+- Named reroute usages contain a `Declaration` edge whose declaration `Input` continues to the upstream graph
+- Reachable function calls have independent TXT/JSON files listed by `dependentFunctionExports`, without `FunctionOutput:` subgraphs in the caller
+- Complete Custom source appears under `CustomHLSL`/`customHlsl` only in its owning material or function file
 - Parameters, texture references, or function calls appear in the graph
 - `DeclaredParameters` appears in both `.txt` and `.json`
 - Declared-but-unused parameters are still preserved

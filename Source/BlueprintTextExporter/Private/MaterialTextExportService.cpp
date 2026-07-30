@@ -2,6 +2,8 @@
 
 #include "MaterialTextExportService.h"
 
+#include "Runtime/Launch/Resources/Version.h"
+
 #include "Dom/JsonObject.h"
 #include "Engine/Font.h"
 #include "Engine/Texture.h"
@@ -12,6 +14,9 @@
 #include "Materials/MaterialExpressionCustomOutput.h"
 #include "Materials/MaterialExpressionFunctionOutput.h"
 #include "Materials/MaterialExpressionMaterialFunctionCall.h"
+#if ENGINE_MAJOR_VERSION >= 5
+#include "Materials/MaterialExpressionNamedReroute.h"
+#endif
 #include "Materials/MaterialExpressionReroute.h"
 #include "Materials/MaterialFunction.h"
 #include "Materials/MaterialFunctionInstance.h"
@@ -72,6 +77,25 @@ namespace UE::MaterialTextExporter
 		FString SourceAssetPath;
 	};
 
+	struct FDependentFunctionExport
+	{
+		FString AssetPath;
+		FString TextPath;
+		FString JsonPath;
+	};
+
+	struct FCustomHlsl
+	{
+		FString NodeId;
+		FString Title;
+		FString Description;
+		FString OutputType;
+		TArray<FString> AdditionalOutputs;
+		TArray<FString> AdditionalDefines;
+		TArray<FString> IncludeFilePaths;
+		FString Code;
+	};
+
 	struct FGraphSummary
 	{
 		FString AssetKind;
@@ -82,14 +106,19 @@ namespace UE::MaterialTextExporter
 		bool bTwoSided = false;
 		FString ParentPath;
 		TArray<FString> DependentFunctions;
+		TArray<FDependentFunctionExport> DependentFunctionExports;
 		TArray<FString> Notes;
 		TArray<FDeclaredParameter> DeclaredParameters;
 		TArray<FRootChain> Roots;
+		TArray<UMaterialFunctionInterface*> ReachableFunctions;
+		TArray<FCustomHlsl> CustomHlsl;
+		TSet<const UMaterialExpression*> CollectedCustomExpressions;
 	};
 
 	struct FBuildContext
 	{
 		TSet<FString> VisitingKeys;
+		FGraphSummary* Summary = nullptr;
 	};
 
 	static FString NormalizeWhitespace(FString InValue)
@@ -202,7 +231,48 @@ namespace UE::MaterialTextExporter
 		return NormalizeWhitespace(InExpression->GetInputPinDefaultValue(InInputIndex));
 	}
 
+	static void CollectCustomHlsl(UMaterialExpressionCustom* InCustomExpression, FGraphSummary& InSummary)
+	{
+		if (InCustomExpression == nullptr || InSummary.CollectedCustomExpressions.Contains(InCustomExpression))
+		{
+			return;
+		}
+
+		InSummary.CollectedCustomExpressions.Add(InCustomExpression);
+		FCustomHlsl& CustomHlsl = InSummary.CustomHlsl.AddDefaulted_GetRef();
+		CustomHlsl.NodeId = GetExpressionKey(InCustomExpression, 0);
+		CustomHlsl.Title = GetCaptionText(InCustomExpression);
+		CustomHlsl.Description = InCustomExpression->Description;
+		CustomHlsl.Code = InCustomExpression->Code;
+		CustomHlsl.OutputType = FString::FromInt(InCustomExpression->OutputType);
+		for (const FCustomOutput& Output : InCustomExpression->AdditionalOutputs)
+		{
+			CustomHlsl.AdditionalOutputs.Add(FString::Printf(TEXT("%s:%d"), *Output.OutputName.ToString(), static_cast<int32>(Output.OutputType)));
+		}
+#if ENGINE_MAJOR_VERSION >= 5
+		for (const FCustomDefine& Define : InCustomExpression->AdditionalDefines)
+		{
+			CustomHlsl.AdditionalDefines.Add(FString::Printf(TEXT("%s=%s"), *Define.DefineName, *Define.DefineValue));
+		}
+		CustomHlsl.IncludeFilePaths = InCustomExpression->IncludeFilePaths;
+#endif
+	}
+
 	static TSharedPtr<FExpressionNode> BuildExpressionNode(UMaterialExpression* InExpression, int32 InOutputIndex, FBuildContext& InContext);
+
+	static void AddManualInputEdge(UMaterialExpression* InOwnerExpression, const FExpressionInput* InInput, int32 InInputIndex, const FString& InLabel, FBuildContext& InContext, TArray<FExpressionEdge>& OutEdges)
+	{
+		FExpressionEdge& Edge = OutEdges.AddDefaulted_GetRef();
+		Edge.Label = InLabel;
+		if (InInput != nullptr && InInput->Expression != nullptr)
+		{
+			Edge.Target = BuildExpressionNode(InInput->Expression, InInput->OutputIndex, InContext);
+		}
+		else if (InOwnerExpression != nullptr)
+		{
+			Edge.Literal = GetInputDefaultLiteral(InOwnerExpression, InInputIndex);
+		}
+	}
 
 	static TSharedPtr<FExpressionNode> BuildExpressionNodeFromInput(const FExpressionInput* InInput, const FString& InLabel, FBuildContext& InContext, FExpressionEdge& OutEdge)
 	{
@@ -256,38 +326,58 @@ namespace UE::MaterialTextExporter
 		Node->NodeClass = InExpression->GetClass()->GetName();
 		Node->Details = GetExpressionDetails(InExpression);
 
-		for (FExpressionInputIterator It(InExpression); It; ++It)
+		if (InContext.Summary != nullptr)
 		{
-			FExpressionEdge& Edge = Node->Inputs.AddDefaulted_GetRef();
-			Edge.Label = NormalizeWhitespace(InExpression->GetInputName(It.Index).ToString());
-			if (Edge.Label.IsEmpty())
+			if (UMaterialExpressionCustom* CustomExpression = Cast<UMaterialExpressionCustom>(InExpression))
 			{
-				Edge.Label = FString::Printf(TEXT("Input%d"), It.Index);
+				CollectCustomHlsl(CustomExpression, *InContext.Summary);
 			}
-
-			if (It->Expression != nullptr)
+			if (UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(InExpression))
 			{
-				Edge.Target = BuildExpressionNode(It->Expression, It->OutputIndex, InContext);
-			}
-			else
-			{
-				Edge.Literal = GetInputDefaultLiteral(InExpression, It.Index);
+				if (FunctionCall->MaterialFunction != nullptr)
+				{
+					InContext.Summary->ReachableFunctions.AddUnique(FunctionCall->MaterialFunction);
+				}
 			}
 		}
 
-		if (UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(InExpression))
+#if ENGINE_MAJOR_VERSION >= 5
+		if (UMaterialExpressionNamedRerouteUsage* NamedUsage = Cast<UMaterialExpressionNamedRerouteUsage>(InExpression))
 		{
-			if (FunctionCall->FunctionOutputs.IsValidIndex(InOutputIndex))
+			FExpressionEdge& Edge = Node->Inputs.AddDefaulted_GetRef();
+			Edge.Label = TEXT("Declaration");
+			if (NamedUsage->Declaration != nullptr)
 			{
-				const FFunctionExpressionOutput& FunctionOutput = FunctionCall->FunctionOutputs[InOutputIndex];
-				if (FunctionOutput.ExpressionOutput != nullptr)
+				Edge.Target = BuildExpressionNode(NamedUsage->Declaration, 0, InContext);
+			}
+			else
+			{
+				Edge.Literal = TEXT("UnresolvedNamedReroute");
+				Node->Details = Node->Details.IsEmpty() ? TEXT("UnresolvedNamedReroute") : Node->Details + TEXT(", UnresolvedNamedReroute");
+			}
+		}
+		else if (UMaterialExpressionNamedRerouteDeclaration* NamedDeclaration = Cast<UMaterialExpressionNamedRerouteDeclaration>(InExpression))
+		{
+			AddManualInputEdge(InExpression, &NamedDeclaration->Input, 0, TEXT("Input"), InContext, Node->Inputs);
+		}
+		else
+#endif
+		{
+			for (FExpressionInputIterator It(InExpression); It; ++It)
+			{
+				FExpressionEdge& Edge = Node->Inputs.AddDefaulted_GetRef();
+				Edge.Label = NormalizeWhitespace(InExpression->GetInputName(It.Index).ToString());
+				if (Edge.Label.IsEmpty())
 				{
-					FExpressionEdge& Edge = Node->Inputs.AddDefaulted_GetRef();
-					Edge.Label = FString::Printf(TEXT("FunctionOutput:%s"), *FunctionOutput.ExpressionOutput->OutputName.ToString());
-					if (FunctionOutput.ExpressionOutput->A.Expression != nullptr)
-					{
-						Edge.Target = BuildExpressionNode(FunctionOutput.ExpressionOutput->A.Expression, FunctionOutput.ExpressionOutput->A.OutputIndex, InContext);
-					}
+					Edge.Label = FString::Printf(TEXT("Input%d"), It.Index);
+				}
+				if (It->Expression != nullptr)
+				{
+					Edge.Target = BuildExpressionNode(It->Expression, It->OutputIndex, InContext);
+				}
+				else
+				{
+					Edge.Literal = GetInputDefaultLiteral(InExpression, It.Index);
 				}
 			}
 		}
@@ -796,6 +886,7 @@ namespace UE::MaterialTextExporter
 			if (RootInput.Input != nullptr && RootInput.Input->Expression != nullptr)
 			{
 				FBuildContext BuildContext;
+				BuildContext.Summary = &OutSummary;
 				Root.RootNode = BuildExpressionNode(RootInput.Input->Expression, RootInput.Input->OutputIndex, BuildContext);
 			}
 		}
@@ -812,6 +903,7 @@ namespace UE::MaterialTextExporter
 			FRootChain& Root = OutSummary.Roots.AddDefaulted_GetRef();
 			Root.Label = FString::Printf(TEXT("Custom Output: %s"), *GetCaptionText(CustomOutput));
 			FBuildContext BuildContext;
+			BuildContext.Summary = &OutSummary;
 			Root.RootNode = BuildExpressionNode(CustomOutput, 0, BuildContext);
 		}
 	}
@@ -838,6 +930,7 @@ namespace UE::MaterialTextExporter
 			if (Output->A.Expression != nullptr)
 			{
 				FBuildContext BuildContext;
+				BuildContext.Summary = &OutSummary;
 				Root.RootNode = BuildExpressionNode(Output->A.Expression, Output->A.OutputIndex, BuildContext);
 			}
 		}
@@ -986,6 +1079,14 @@ namespace UE::MaterialTextExporter
 				Lines.Add(TEXT("  ") + FunctionPath);
 			}
 		}
+		if (InSummary.DependentFunctionExports.Num() > 0)
+		{
+			Lines.Add(TEXT("DependentFunctionExports:"));
+			for (const FDependentFunctionExport& FunctionExport : InSummary.DependentFunctionExports)
+			{
+				Lines.Add(FString::Printf(TEXT("  %s [TXT=%s] [JSON=%s]"), *FunctionExport.AssetPath, *FunctionExport.TextPath, *FunctionExport.JsonPath));
+			}
+		}
 		if (InSummary.Notes.Num() > 0)
 		{
 			Lines.Add(TEXT("Notes:"));
@@ -1040,6 +1141,26 @@ namespace UE::MaterialTextExporter
 			Lines.Add(TEXT(""));
 		}
 
+		if (InSummary.CustomHlsl.Num() > 0)
+		{
+			Lines.Add(TEXT("CustomHLSL:"));
+			for (const FCustomHlsl& CustomHlsl : InSummary.CustomHlsl)
+			{
+				Lines.Add(FString::Printf(TEXT("  [Custom] %s [Id=%s] [OutputType=%s]"), *CustomHlsl.Title, *CustomHlsl.NodeId, *CustomHlsl.OutputType));
+				if (!CustomHlsl.Description.IsEmpty())
+				{
+					Lines.Add(TEXT("    Description: ") + NormalizeWhitespace(CustomHlsl.Description));
+				}
+				for (const FString& Output : CustomHlsl.AdditionalOutputs) Lines.Add(TEXT("    AdditionalOutput: ") + Output);
+				for (const FString& Define : CustomHlsl.AdditionalDefines) Lines.Add(TEXT("    Define: ") + Define);
+				for (const FString& IncludePath : CustomHlsl.IncludeFilePaths) Lines.Add(TEXT("    Include: ") + IncludePath);
+				Lines.Add(TEXT("----- BEGIN HLSL -----"));
+				Lines.Add(CustomHlsl.Code);
+				Lines.Add(TEXT("----- END HLSL -----"));
+				Lines.Add(TEXT(""));
+			}
+		}
+
 		return FString::Join(Lines, TEXT("\r\n"));
 	}
 
@@ -1060,6 +1181,17 @@ namespace UE::MaterialTextExporter
 			FunctionArray.Add(MakeShared<FJsonValueString>(FunctionPath));
 		}
 		RootObject->SetArrayField(TEXT("dependentFunctions"), FunctionArray);
+
+		TArray<TSharedPtr<FJsonValue>> FunctionExportArray;
+		for (const FDependentFunctionExport& FunctionExport : InSummary.DependentFunctionExports)
+		{
+			TSharedPtr<FJsonObject> FunctionExportObject = MakeShared<FJsonObject>();
+			FunctionExportObject->SetStringField(TEXT("assetPath"), FunctionExport.AssetPath);
+			FunctionExportObject->SetStringField(TEXT("textPath"), FunctionExport.TextPath);
+			FunctionExportObject->SetStringField(TEXT("jsonPath"), FunctionExport.JsonPath);
+			FunctionExportArray.Add(MakeShared<FJsonValueObject>(FunctionExportObject));
+		}
+		RootObject->SetArrayField(TEXT("dependentFunctionExports"), FunctionExportArray);
 
 		TArray<TSharedPtr<FJsonValue>> NotesArray;
 		for (const FString& Note : InSummary.Notes)
@@ -1097,6 +1229,28 @@ namespace UE::MaterialTextExporter
 		}
 		RootObject->SetArrayField(TEXT("roots"), RootArray);
 
+		TArray<TSharedPtr<FJsonValue>> CustomHlslArray;
+		for (const FCustomHlsl& CustomHlsl : InSummary.CustomHlsl)
+		{
+			TSharedPtr<FJsonObject> CustomHlslObject = MakeShared<FJsonObject>();
+			CustomHlslObject->SetStringField(TEXT("nodeId"), CustomHlsl.NodeId);
+			CustomHlslObject->SetStringField(TEXT("title"), CustomHlsl.Title);
+			CustomHlslObject->SetStringField(TEXT("description"), CustomHlsl.Description);
+			CustomHlslObject->SetStringField(TEXT("outputType"), CustomHlsl.OutputType);
+			CustomHlslObject->SetStringField(TEXT("code"), CustomHlsl.Code);
+			auto AddStringArray = [&CustomHlslObject](const TCHAR* FieldName, const TArray<FString>& Values)
+			{
+				TArray<TSharedPtr<FJsonValue>> JsonValues;
+				for (const FString& Value : Values) JsonValues.Add(MakeShared<FJsonValueString>(Value));
+				CustomHlslObject->SetArrayField(FieldName, JsonValues);
+			};
+			AddStringArray(TEXT("additionalOutputs"), CustomHlsl.AdditionalOutputs);
+			AddStringArray(TEXT("additionalDefines"), CustomHlsl.AdditionalDefines);
+			AddStringArray(TEXT("includeFilePaths"), CustomHlsl.IncludeFilePaths);
+			CustomHlslArray.Add(MakeShared<FJsonValueObject>(CustomHlslObject));
+		}
+		RootObject->SetArrayField(TEXT("customHlsl"), CustomHlslArray);
+
 		FString JsonOutput;
 		const TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&JsonOutput);
 		FJsonSerializer::Serialize(RootObject.ToSharedRef(), Writer);
@@ -1117,6 +1271,63 @@ namespace UE::MaterialTextExporter
 		OutTextPath = FPaths::Combine(ExportDirectory, AssetName + TEXT(".txt"));
 		OutJsonPath = FPaths::Combine(ExportDirectory, AssetName + TEXT(".json"));
 	}
+
+	static FString MakeExportReferencePath(const FString& InAbsolutePath)
+	{
+		FString RelativePath = InAbsolutePath;
+		FPaths::MakePathRelativeTo(RelativePath, *FPaths::ProjectSavedDir());
+		RelativePath.ReplaceInline(TEXT("\\"), TEXT("/"));
+		return RelativePath;
+	}
+
+	static bool SaveSummary(const FGraphSummary& InSummary, const FString& InTextPath, const FString& InJsonPath, FString& OutErrorMessage)
+	{
+		if (!FFileHelper::SaveStringToFile(BuildTextOutput(InSummary), *InTextPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+		{
+			OutErrorMessage = FString::Printf(TEXT("Failed to save text output to '%s'."), *InTextPath);
+			return false;
+		}
+		if (!FFileHelper::SaveStringToFile(BuildJsonOutput(InSummary), *InJsonPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
+		{
+			OutErrorMessage = FString::Printf(TEXT("Failed to save JSON output to '%s'."), *InJsonPath);
+			return false;
+		}
+		return true;
+	}
+
+	static bool ExportAssetRecursive(UObject* InAsset, TSet<FString>& InOutVisitingAssets, TSet<FString>& InOutExportedAssets, FString& OutTextPath, FString& OutJsonPath, FString& OutErrorMessage)
+	{
+		const FString AssetPath = InAsset->GetPathName();
+		BuildExportPaths(InAsset, OutTextPath, OutJsonPath);
+		if (InOutExportedAssets.Contains(AssetPath)) return true;
+		FGraphSummary Summary = BuildSummary(InAsset);
+		InOutVisitingAssets.Add(AssetPath);
+		for (UMaterialFunctionInterface* Function : Summary.ReachableFunctions)
+		{
+			if (Function == nullptr) continue;
+			FString FunctionTextPath;
+			FString FunctionJsonPath;
+			BuildExportPaths(Function, FunctionTextPath, FunctionJsonPath);
+			FDependentFunctionExport& FunctionExport = Summary.DependentFunctionExports.AddDefaulted_GetRef();
+			FunctionExport.AssetPath = Function->GetPathName();
+			FunctionExport.TextPath = MakeExportReferencePath(FunctionTextPath);
+			FunctionExport.JsonPath = MakeExportReferencePath(FunctionJsonPath);
+			if (!InOutVisitingAssets.Contains(FunctionExport.AssetPath) && !InOutExportedAssets.Contains(FunctionExport.AssetPath))
+			{
+				FString DependencyError;
+				if (!ExportAssetRecursive(Function, InOutVisitingAssets, InOutExportedAssets, FunctionTextPath, FunctionJsonPath, DependencyError))
+				{
+					OutErrorMessage = FString::Printf(TEXT("Failed to export dependent function '%s': %s"), *FunctionExport.AssetPath, *DependencyError);
+					InOutVisitingAssets.Remove(AssetPath);
+					return false;
+				}
+			}
+		}
+		InOutVisitingAssets.Remove(AssetPath);
+		if (!SaveSummary(Summary, OutTextPath, OutJsonPath, OutErrorMessage)) return false;
+		InOutExportedAssets.Add(AssetPath);
+		return true;
+	}
 }
 
 bool FMaterialTextExportService::ExportMaterialAsset(UObject* InAsset, FString& OutTextPath, FString& OutJsonPath, FString& OutErrorMessage)
@@ -1135,26 +1346,7 @@ bool FMaterialTextExportService::ExportMaterialAsset(UObject* InAsset, FString& 
 		return false;
 	}
 
-	FGraphSummary Summary = BuildSummary(InAsset);
-	// Moon Modified: Material instances may intentionally have no local graph or overrides,
-	// while their parent and material settings remain useful export data.
-
-	BuildExportPaths(InAsset, OutTextPath, OutJsonPath);
-
-	const FString TextOutput = BuildTextOutput(Summary);
-	const FString JsonOutput = BuildJsonOutput(Summary);
-
-	if (!FFileHelper::SaveStringToFile(TextOutput, *OutTextPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-	{
-		OutErrorMessage = FString::Printf(TEXT("Failed to save text output to '%s'."), *OutTextPath);
-		return false;
-	}
-
-	if (!FFileHelper::SaveStringToFile(JsonOutput, *OutJsonPath, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
-	{
-		OutErrorMessage = FString::Printf(TEXT("Failed to save JSON output to '%s'."), *OutJsonPath);
-		return false;
-	}
-
-	return true;
+	TSet<FString> VisitingAssets;
+	TSet<FString> ExportedAssets;
+	return ExportAssetRecursive(InAsset, VisitingAssets, ExportedAssets, OutTextPath, OutJsonPath, OutErrorMessage);
 }

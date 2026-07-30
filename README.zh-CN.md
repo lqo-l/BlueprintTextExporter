@@ -21,6 +21,9 @@ BlueprintTextExporter 是一个 Unreal Editor 插件，用于把原本只能在�
 - Blueprint 导出包含纯节点输入上下文
 - Material 导出包含根属性图追踪
 - 支持从 `Use Material Attributes` 材质的 `Material Attributes` 根节点导出
+- 支持从命名重路由 Usage 经 Declaration 继续溯源
+- 将实际可达的 Material Function 递归导出为独立 TXT 和 JSON
+- 完整保留 Custom 节点 HLSL、Define、Include 和额外输出
 - 支持导出声明参数，包括暴露但未接入最终输出的参数
 - 支持通过命令行批量导出 Blueprint 和材质
 - 支持在已打开的 Editor 控制台中导出，便于 Codex 自动化

@@ -21,6 +21,9 @@ BlueprintTextExporter is an Unreal Editor plugin for turning graph-based assets 
 - Inline pure-input context for Blueprint graphs
 - Root-property traversal for Material graphs
 - Supports `Use Material Attributes` materials through their `Material Attributes` root
+- Resolves named reroute usages through their declarations
+- Exports reachable Material Functions recursively as independent TXT and JSON files
+- Preserves complete Custom-node HLSL, defines, includes, and additional outputs
 - Declared parameter export, including exposed-but-unused parameters
 - Command-line batch export for Blueprints and materials
 - Current-Editor console export for Codex and other editor automation

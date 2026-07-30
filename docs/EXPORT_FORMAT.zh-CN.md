@@ -43,9 +43,11 @@ Material 导出同样会生成：
 - `BlendMode`
 - `TwoSided`
 - `DependentFunctions`
+- `DependentFunctionExports`
 - `Notes`
 - `DeclaredParameters`
 - `Graph`
+- `CustomHLSL`
 
 ## Material JSON 字段
 
@@ -59,9 +61,13 @@ Material 导出同样会生成：
 - `twoSided`
 - `parentPath`
 - `dependentFunctions`
+- `dependentFunctionExports`
 - `notes`
 - `declaredParameters`
 - `roots`
+- `customHlsl`
+
+实际可达的 Material Function 会递归导出为各自独立的 TXT 和 JSON。调用方图中保留 Function Call 节点，`dependentFunctionExports` 将每个函数资产路径映射到对应导出文件。`customHlsl` 只属于当前材质或函数，并完整保留 Custom 节点源码及配置。
 
 ## Declared Parameters
 
