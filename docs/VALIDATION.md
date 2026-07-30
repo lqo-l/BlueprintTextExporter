@@ -53,6 +53,10 @@ Expected evidence:
 - Both TXT and JSON files are refreshed under `Saved/MaterialExports`.
 - An invalid asset path logs `Cannot load asset` and displays a non-blocking failure notification.
 
+`Use Material Attributes` export was also verified in the running `Client` Editor with
+`/KuroRender/KuroDynamicEnv/Material/Stars/M_Stars`. The refreshed TXT contains
+`[Root] Material Attributes` followed by a non-empty `Switch Param` and `SetMaterialAttributes` graph.
+
 When using an MCP implementation that forwards Python through the Output Log `py` command, keep the code on one line or wrap multi-line code in `exec(...)`; raw indentation-based `for`, `if`, or `try` blocks may otherwise be split into separate console commands.
 
 ## 3. What To Check
@@ -68,6 +72,7 @@ When using an MCP implementation that forwards Python through the Output Log `py
 
 - `MaterialDomain` is present
 - At least one root output is visible, such as `Emissive Color` or `Base Color`
+- For a `Use Material Attributes` material, `[Root] Material Attributes` is present and its child graph is non-empty
 - Parameters, texture references, or function calls appear in the graph
 - `DeclaredParameters` appears in both `.txt` and `.json`
 - Declared-but-unused parameters are still preserved

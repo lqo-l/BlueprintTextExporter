@@ -53,6 +53,10 @@ import unreal; unreal.SystemLibrary.execute_console_command(unreal.get_editor_su
 - `Saved/MaterialExports` 下对应 TXT 和 JSON 的更新时间刷新。
 - 无效路径输出 `Cannot load asset`，并显示非阻塞失败通知。
 
+此外已在正在运行的 `Client` Editor 中验证 `/KuroRender/KuroDynamicEnv/Material/Stars/M_Stars`
+的 `Use Material Attributes` 导出。刷新后的 TXT 包含 `[Root] Material Attributes`，其下存在非空的
+`Switch Param` 与 `SetMaterialAttributes` 节点图。
+
 若 MCP 实现通过 Output Log 的 `py` 命令转发 Python，请保持代码单行，或使用 `exec(...)` 包装多行代码；直接传递包含 `for`、`if`、`try` 等缩进结构的多行脚本可能被拆成多条控制台命令。
 
 ## 3. 输出检查项
@@ -68,6 +72,7 @@ import unreal; unreal.SystemLibrary.execute_console_command(unreal.get_editor_su
 
 - 存在 `MaterialDomain`
 - 能看到至少一个根属性输出，如 `Emissive Color` 或 `Base Color`
+- 对启用 `Use Material Attributes` 的材质，存在 `[Root] Material Attributes`，且其子图不为空
 - 图中能看到参数名、纹理引用或函数调用
 - `.txt` 和 `.json` 中都包含 `DeclaredParameters`
 - 未接入最终输出的已声明参数仍会被保留

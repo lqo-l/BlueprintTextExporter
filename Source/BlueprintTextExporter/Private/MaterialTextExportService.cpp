@@ -722,6 +722,22 @@ namespace UE::MaterialTextExporter
 			return Roots;
 		}
 
+		// Moon Add: Material attribute mode does not set MP_MaterialAttributes in the cached connected-property mask.
+		if (InMaterial->bUseMaterialAttributes)
+		{
+			if (FExpressionInput* Input = InMaterial->GetExpressionInputForProperty(MP_MaterialAttributes))
+			{
+				if (Input->Expression != nullptr)
+				{
+					FRootInput& Root = Roots.AddDefaulted_GetRef();
+					Root.Label = TEXT("Material Attributes");
+					Root.Input = Input;
+				}
+			}
+
+			return Roots;
+		}
+
 		struct FPropertyEntry
 		{
 			EMaterialProperty Property;
