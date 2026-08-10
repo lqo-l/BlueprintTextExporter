@@ -47,6 +47,8 @@ Common sections include:
 - `Notes`
 - `DeclaredParameters`
 - `Graph`
+- `UnusedGraph`
+- `Diagnostics`
 - `CustomHLSL`
 
 ## Material JSON Fields
@@ -65,9 +67,16 @@ Common fields include:
 - `notes`
 - `declaredParameters`
 - `roots`
+- `unusedNodes`
+- `compileDiagnostics`
+- `nodeDiagnostics`
 - `customHlsl`
 
 Reachable Material Functions are exported recursively to their own TXT and JSON files. Function-call nodes remain in the caller graph, while `dependentFunctionExports` maps each function asset path to its output files. `customHlsl` belongs only to the current material or function and preserves complete Custom-node source and configuration.
+
+`Graph`/`roots` contains the graph that contributes to a material root or Material Function output. `UnusedGraph`/`unusedNodes` preserves disconnected authoring components, including editor positions. Unused Custom nodes are also included in `customHlsl`, but unused Material Function calls do not trigger recursive dependency export.
+
+`Diagnostics` preserves errors available in the current Editor session. `compileDiagnostics` contains errors cached by the active shader-platform material resource, while `nodeDiagnostics` maps cached compile errors and expression `LastErrorText` to node IDs. Empty diagnostics do not prove that every platform compiles successfully; compile the material for the platform of interest before export when authoritative diagnostics are required.
 
 ## Declared Parameters
 

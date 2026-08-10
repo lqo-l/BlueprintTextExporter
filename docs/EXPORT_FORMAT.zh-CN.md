@@ -47,6 +47,8 @@ Material 导出同样会生成：
 - `Notes`
 - `DeclaredParameters`
 - `Graph`
+- `UnusedGraph`
+- `Diagnostics`
 - `CustomHLSL`
 
 ## Material JSON 字段
@@ -65,9 +67,16 @@ Material 导出同样会生成：
 - `notes`
 - `declaredParameters`
 - `roots`
+- `unusedNodes`
+- `compileDiagnostics`
+- `nodeDiagnostics`
 - `customHlsl`
 
 实际可达的 Material Function 会递归导出为各自独立的 TXT 和 JSON。调用方图中保留 Function Call 节点，`dependentFunctionExports` 将每个函数资产路径映射到对应导出文件。`customHlsl` 只属于当前材质或函数，并完整保留 Custom 节点源码及配置。
+
+`Graph`/`roots` 保存实际连接到材质根或 Material Function 输出的有效图；`UnusedGraph`/`unusedNodes` 保存未连接的创作节点组件及编辑器坐标。未使用的 Custom 节点也会进入 `customHlsl`，但未使用的 Material Function Call 不会触发递归依赖导出。
+
+`Diagnostics` 保存当前 Editor 会话能够提供的错误。`compileDiagnostics` 来自当前 Shader Platform 的材质资源缓存，`nodeDiagnostics` 将缓存编译错误和表达式 `LastErrorText` 关联到节点 ID。诊断为空不代表所有平台一定编译成功；需要权威结果时，应先针对目标平台编译材质再导出。
 
 ## Declared Parameters
 

@@ -27,6 +27,7 @@ public class BlueprintTextExporter : ModuleRules
 				"JsonUtilities",
 				"Kismet",
 				"Projects",
+				"RHI",
 				"Slate",
 				"SlateCore",
 				"ToolMenus",

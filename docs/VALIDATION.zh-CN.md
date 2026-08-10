@@ -79,6 +79,8 @@ import unreal; unreal.SystemLibrary.execute_console_command(unreal.get_editor_su
 - 图中能看到参数名、纹理引用或函数调用
 - `.txt` 和 `.json` 中都包含 `DeclaredParameters`
 - 未接入最终输出的已声明参数仍会被保留
+- 未连接节点组件出现在 `UnusedGraph`/`unusedNodes`，并保留编辑器坐标
+- 当前缓存的材质错误出现在 `Diagnostics`、`compileDiagnostics` 或 `nodeDiagnostics`；验证该项前应先编译材质
 
 ## 4. 建议测试素材
 

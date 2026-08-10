@@ -23,12 +23,14 @@
 #include "Materials/MaterialFunctionInterface.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInterface.h"
+#include "MaterialShared.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "Misc/SecureHash.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
+#include "RHI.h"
 #include "UObject/Package.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogMaterialTextExporter, Log, All);
@@ -96,6 +98,21 @@ namespace UE::MaterialTextExporter
 		FString Code;
 	};
 
+	struct FUnusedExpressionNode
+	{
+		TSharedPtr<FExpressionNode> Node;
+		int32 EditorX = 0;
+		int32 EditorY = 0;
+	};
+
+	struct FNodeDiagnostic
+	{
+		FString NodeId;
+		FString Title;
+		FString Severity;
+		FString Message;
+	};
+
 	struct FGraphSummary
 	{
 		FString AssetKind;
@@ -113,12 +130,18 @@ namespace UE::MaterialTextExporter
 		TArray<UMaterialFunctionInterface*> ReachableFunctions;
 		TArray<FCustomHlsl> CustomHlsl;
 		TSet<const UMaterialExpression*> CollectedCustomExpressions;
+		TSet<const UMaterialExpression*> ReachableExpressions;
+		TArray<FUnusedExpressionNode> UnusedNodes;
+		TArray<FString> CompileDiagnostics;
+		TArray<FNodeDiagnostic> NodeDiagnostics;
 	};
 
 	struct FBuildContext
 	{
 		TSet<FString> VisitingKeys;
 		FGraphSummary* Summary = nullptr;
+		bool bRecordReachability = true;
+		bool bCollectFunctionDependencies = true;
 	};
 
 	static FString NormalizeWhitespace(FString InValue)
@@ -297,6 +320,11 @@ namespace UE::MaterialTextExporter
 			return nullptr;
 		}
 
+		if (InContext.Summary != nullptr && InContext.bRecordReachability)
+		{
+			InContext.Summary->ReachableExpressions.Add(InExpression);
+		}
+
 		if (UMaterialExpressionReroute* Reroute = Cast<UMaterialExpressionReroute>(InExpression))
 		{
 			if (FExpressionInput* Input = Reroute->GetInput(0))
@@ -332,11 +360,14 @@ namespace UE::MaterialTextExporter
 			{
 				CollectCustomHlsl(CustomExpression, *InContext.Summary);
 			}
-			if (UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(InExpression))
+			if (InContext.bCollectFunctionDependencies)
 			{
-				if (FunctionCall->MaterialFunction != nullptr)
+				if (UMaterialExpressionMaterialFunctionCall* FunctionCall = Cast<UMaterialExpressionMaterialFunctionCall>(InExpression))
 				{
-					InContext.Summary->ReachableFunctions.AddUnique(FunctionCall->MaterialFunction);
+					if (FunctionCall->MaterialFunction != nullptr)
+					{
+						InContext.Summary->ReachableFunctions.AddUnique(FunctionCall->MaterialFunction);
+					}
 				}
 			}
 		}
@@ -936,6 +967,124 @@ namespace UE::MaterialTextExporter
 		}
 	}
 
+	static void AddNodeDiagnostic(UMaterialExpression* InExpression, const FString& InSeverity, const FString& InMessage, FGraphSummary& OutSummary)
+	{
+		if (InExpression == nullptr || InMessage.IsEmpty())
+		{
+			return;
+		}
+
+		FNodeDiagnostic& Diagnostic = OutSummary.NodeDiagnostics.AddDefaulted_GetRef();
+		Diagnostic.NodeId = GetExpressionKey(InExpression, 0);
+		Diagnostic.Title = GetCaptionText(InExpression);
+		Diagnostic.Severity = InSeverity;
+		Diagnostic.Message = InMessage;
+	}
+
+	static void CollectUnusedNodesAndStoredDiagnostics(TConstArrayView<TObjectPtr<UMaterialExpression>> InExpressions, FGraphSummary& OutSummary)
+	{
+		TSet<UMaterialExpression*> UnusedExpressions;
+		TSet<UMaterialExpression*> ReferencedByUnusedExpression;
+		for (UMaterialExpression* Expression : InExpressions)
+		{
+			if (Expression == nullptr)
+			{
+				continue;
+			}
+			if (!Expression->LastErrorText.IsEmpty())
+			{
+				AddNodeDiagnostic(Expression, TEXT("Error"), Expression->LastErrorText, OutSummary);
+			}
+			if (!OutSummary.ReachableExpressions.Contains(Expression))
+			{
+				UnusedExpressions.Add(Expression);
+			}
+		}
+
+		for (UMaterialExpression* Expression : UnusedExpressions)
+		{
+			for (FExpressionInputIterator It(Expression); It; ++It)
+			{
+				if (It->Expression != nullptr && UnusedExpressions.Contains(It->Expression))
+				{
+					ReferencedByUnusedExpression.Add(It->Expression);
+				}
+			}
+		}
+
+		TSet<UMaterialExpression*> CoveredExpressions;
+		TFunction<void(UMaterialExpression*)> MarkCovered;
+		MarkCovered = [&CoveredExpressions, &MarkCovered](UMaterialExpression* Expression)
+		{
+			if (Expression == nullptr || CoveredExpressions.Contains(Expression))
+			{
+				return;
+			}
+			CoveredExpressions.Add(Expression);
+			for (FExpressionInputIterator It(Expression); It; ++It)
+			{
+				MarkCovered(It->Expression);
+			}
+#if ENGINE_MAJOR_VERSION >= 5
+			if (UMaterialExpressionNamedRerouteUsage* NamedUsage = Cast<UMaterialExpressionNamedRerouteUsage>(Expression))
+			{
+				MarkCovered(NamedUsage->Declaration);
+			}
+#endif
+		};
+
+		auto AddUnusedRoot = [&OutSummary, &MarkCovered](UMaterialExpression* Expression)
+		{
+			FBuildContext BuildContext;
+			BuildContext.Summary = &OutSummary;
+			BuildContext.bRecordReachability = false;
+			BuildContext.bCollectFunctionDependencies = false;
+			FUnusedExpressionNode& UnusedNode = OutSummary.UnusedNodes.AddDefaulted_GetRef();
+			UnusedNode.Node = BuildExpressionNode(Expression, 0, BuildContext);
+			UnusedNode.EditorX = Expression->MaterialExpressionEditorX;
+			UnusedNode.EditorY = Expression->MaterialExpressionEditorY;
+			MarkCovered(Expression);
+		};
+
+		for (UMaterialExpression* Expression : UnusedExpressions)
+		{
+			if (!ReferencedByUnusedExpression.Contains(Expression))
+			{
+				AddUnusedRoot(Expression);
+			}
+		}
+		for (UMaterialExpression* Expression : UnusedExpressions)
+		{
+			if (!CoveredExpressions.Contains(Expression))
+			{
+				AddUnusedRoot(Expression);
+			}
+		}
+	}
+
+	static void CollectCompileDiagnostics(UMaterialInterface* InMaterialInterface, FGraphSummary& OutSummary)
+	{
+		if (InMaterialInterface == nullptr)
+		{
+			return;
+		}
+		const FMaterialResource* MaterialResource = InMaterialInterface->GetMaterialResource(GMaxRHIShaderPlatform);
+		if (MaterialResource == nullptr)
+		{
+			return;
+		}
+		const TArray<FString>& Errors = MaterialResource->GetCompileErrors();
+		const TArray<UMaterialExpression*>& ErrorExpressions = MaterialResource->GetErrorExpressions();
+		for (int32 ErrorIndex = 0; ErrorIndex < Errors.Num(); ++ErrorIndex)
+		{
+			OutSummary.CompileDiagnostics.Add(Errors[ErrorIndex]);
+			if (ErrorExpressions.IsValidIndex(ErrorIndex) && ErrorExpressions[ErrorIndex] != nullptr)
+			{
+				AddNodeDiagnostic(ErrorExpressions[ErrorIndex], TEXT("CompileError"), Errors[ErrorIndex], OutSummary);
+			}
+		}
+	}
+
 	static void AddInstanceParameterNotes(UMaterialInterface* InMaterialInterface, FGraphSummary& OutSummary)
 	{
 		TArray<FMaterialParameterInfo> ScalarInfos;
@@ -1005,6 +1154,8 @@ namespace UE::MaterialTextExporter
 			AddDependentFunctions(Material, Summary);
 			CollectDeclaredParametersFromMaterial(Material, Summary);
 			BuildMaterialRoots(Material, Summary);
+			CollectUnusedNodesAndStoredDiagnostics(Material->GetExpressions(), Summary);
+			CollectCompileDiagnostics(Material, Summary);
 		}
 		else if (UMaterialInstance* MaterialInstance = Cast<UMaterialInstance>(InAsset))
 		{
@@ -1020,6 +1171,8 @@ namespace UE::MaterialTextExporter
 				CollectDeclaredParametersFromMaterialInterface(MaterialInstance, Summary);
 				AddInstanceParameterNotes(MaterialInstance, Summary);
 				BuildMaterialRoots(BaseMaterial, Summary);
+				CollectUnusedNodesAndStoredDiagnostics(BaseMaterial->GetExpressions(), Summary);
+				CollectCompileDiagnostics(MaterialInstance, Summary);
 			}
 		}
 		else if (UMaterialFunctionInterface* MaterialFunction = Cast<UMaterialFunctionInterface>(InAsset))
@@ -1029,6 +1182,7 @@ namespace UE::MaterialTextExporter
 			AddDependentFunctions(MaterialFunction, Summary);
 			CollectDeclaredParametersFromFunction(MaterialFunction, Summary);
 			BuildMaterialFunctionRoots(MaterialFunction, Summary);
+			CollectUnusedNodesAndStoredDiagnostics(MaterialFunction->GetExpressions(), Summary);
 
 			if (const UMaterialFunction* ConcreteFunction = Cast<UMaterialFunction>(MaterialFunction))
 			{
@@ -1141,6 +1295,31 @@ namespace UE::MaterialTextExporter
 			Lines.Add(TEXT(""));
 		}
 
+		if (InSummary.UnusedNodes.Num() > 0)
+		{
+			Lines.Add(TEXT("UnusedGraph:"));
+			for (const FUnusedExpressionNode& UnusedNode : InSummary.UnusedNodes)
+			{
+				Lines.Add(FString::Printf(TEXT("  [UnusedRoot] EditorPosition=(%d,%d)"), UnusedNode.EditorX, UnusedNode.EditorY));
+				AppendExpressionText(UnusedNode.Node, TEXT("    "), Lines);
+				Lines.Add(TEXT(""));
+			}
+		}
+
+		if (InSummary.CompileDiagnostics.Num() > 0 || InSummary.NodeDiagnostics.Num() > 0)
+		{
+			Lines.Add(TEXT("Diagnostics:"));
+			for (const FString& CompileDiagnostic : InSummary.CompileDiagnostics)
+			{
+				Lines.Add(TEXT("  [CompileError] ") + NormalizeWhitespace(CompileDiagnostic));
+			}
+			for (const FNodeDiagnostic& NodeDiagnostic : InSummary.NodeDiagnostics)
+			{
+				Lines.Add(FString::Printf(TEXT("  [%s] %s [Id=%s]: %s"), *NodeDiagnostic.Severity, *NodeDiagnostic.Title, *NodeDiagnostic.NodeId, *NormalizeWhitespace(NodeDiagnostic.Message)));
+			}
+			Lines.Add(TEXT(""));
+		}
+
 		if (InSummary.CustomHlsl.Num() > 0)
 		{
 			Lines.Add(TEXT("CustomHLSL:"));
@@ -1228,6 +1407,39 @@ namespace UE::MaterialTextExporter
 			RootArray.Add(MakeShared<FJsonValueObject>(RootNode));
 		}
 		RootObject->SetArrayField(TEXT("roots"), RootArray);
+
+		TArray<TSharedPtr<FJsonValue>> UnusedNodeArray;
+		for (const FUnusedExpressionNode& UnusedNode : InSummary.UnusedNodes)
+		{
+			TSharedPtr<FJsonObject> UnusedNodeObject = MakeShared<FJsonObject>();
+			UnusedNodeObject->SetNumberField(TEXT("editorX"), UnusedNode.EditorX);
+			UnusedNodeObject->SetNumberField(TEXT("editorY"), UnusedNode.EditorY);
+			if (UnusedNode.Node.IsValid())
+			{
+				UnusedNodeObject->SetObjectField(TEXT("node"), BuildExpressionJson(UnusedNode.Node));
+			}
+			UnusedNodeArray.Add(MakeShared<FJsonValueObject>(UnusedNodeObject));
+		}
+		RootObject->SetArrayField(TEXT("unusedNodes"), UnusedNodeArray);
+
+		TArray<TSharedPtr<FJsonValue>> CompileDiagnosticArray;
+		for (const FString& CompileDiagnostic : InSummary.CompileDiagnostics)
+		{
+			CompileDiagnosticArray.Add(MakeShared<FJsonValueString>(CompileDiagnostic));
+		}
+		RootObject->SetArrayField(TEXT("compileDiagnostics"), CompileDiagnosticArray);
+
+		TArray<TSharedPtr<FJsonValue>> NodeDiagnosticArray;
+		for (const FNodeDiagnostic& NodeDiagnostic : InSummary.NodeDiagnostics)
+		{
+			TSharedPtr<FJsonObject> DiagnosticObject = MakeShared<FJsonObject>();
+			DiagnosticObject->SetStringField(TEXT("nodeId"), NodeDiagnostic.NodeId);
+			DiagnosticObject->SetStringField(TEXT("title"), NodeDiagnostic.Title);
+			DiagnosticObject->SetStringField(TEXT("severity"), NodeDiagnostic.Severity);
+			DiagnosticObject->SetStringField(TEXT("message"), NodeDiagnostic.Message);
+			NodeDiagnosticArray.Add(MakeShared<FJsonValueObject>(DiagnosticObject));
+		}
+		RootObject->SetArrayField(TEXT("nodeDiagnostics"), NodeDiagnosticArray);
 
 		TArray<TSharedPtr<FJsonValue>> CustomHlslArray;
 		for (const FCustomHlsl& CustomHlsl : InSummary.CustomHlsl)

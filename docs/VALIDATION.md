@@ -79,6 +79,8 @@ When using an MCP implementation that forwards Python through the Output Log `py
 - Parameters, texture references, or function calls appear in the graph
 - `DeclaredParameters` appears in both `.txt` and `.json`
 - Declared-but-unused parameters are still preserved
+- Disconnected components appear under `UnusedGraph`/`unusedNodes` with editor coordinates
+- Cached material errors appear under `Diagnostics`, `compileDiagnostics`, or `nodeDiagnostics`; compile the material first when testing this behavior
 
 ## 4. Suggested Test Assets
 
